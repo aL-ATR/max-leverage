@@ -582,7 +582,7 @@ body {
   bottom: 5px;
   width: 2px;
   height: 32px;
-  background: #cbd5e1;
+  background:  #cbd5e1;
 }
 .flag {
   position: absolute;
@@ -676,6 +676,12 @@ body {
 .person.out {
   left: calc(68px - var(--pw) / 2);
 }
+.person.lobby {
+  left: calc(96px - var(--pw) / 2);
+}
+.person.smoking {
+  left: calc(20px - var(--pw) / 2);
+}
 
 .person-svg {
   width: 100%;
@@ -699,6 +705,11 @@ body {
 .p-body { transform-origin: 50% 100%; transition: transform 0.8s ease; }
 .p-leg-l, .p-leg-r, .p-arm-l, .p-arm-r { transform-origin: 50% 0; }
 .p-scarf-tail { transform-origin: 50% 0; transition: transform 0.6s ease; }
+.p-phone, .p-lobby-arm, .p-smoking-arm, .p-cigarette { opacity: 0; }
+.person.lobby .p-phone, .person.lobby .p-lobby-arm,
+.person.smoking .p-smoking-arm, .person.smoking .p-cigarette { opacity: 1; }
+.person.lobby .p-arm-r, .person.smoking .p-arm-r { opacity: 0; }
+.person.lobby .p-body { transform: rotate(0deg); }
 
 /* 走路 */
 .person.walking .p-leg-l, .person.walking .p-arm-r { animation: step-a 0.32s ease-in-out infinite alternate; }
@@ -709,9 +720,65 @@ body {
 /* 楼顶吹风：身体前倾、围巾飘起 */
 .person.out .p-body { transform: rotate(-7deg); }
 .person.out .p-scarf-tail { animation: scarf-flap 0.45s ease-in-out infinite alternate; }
+.person.smoking .p-body { transform: rotate(-3deg); }
+.person.smoking .p-scarf-tail { animation: scarf-flap 0.45s ease-in-out infinite alternate; }
+.person.smoking::after {
+  content: "";
+  position: absolute;
+  top: 2%;
+  right: 2%;
+  width: 3px;
+  height: 8px;
+  border-left: 1px solid rgba(226, 232, 240, 0.9);
+  border-top: 1px solid rgba(226, 232, 240, 0.75);
+  border-radius: 50% 0 0 0;
+  animation: smoke-rise 1.5s ease-in-out infinite;
+}
 @keyframes scarf-flap {
   from { transform: rotate(-68deg) scaleY(1.1); }
   to   { transform: rotate(-92deg) scaleY(1.45); }
+}
+@keyframes smoke-rise {
+  0% {
+    transform: translate(0px, 2px) scale(0.8);
+    opacity: 0.1;
+  }
+
+  15% {
+    transform: translate(0.5px, 0px) scale(0.85);
+    opacity: 0.3;
+  }
+
+  30% {
+    transform: translate(1px, -2px) scale(0.95);
+    opacity: 0.55;
+  }
+
+  50% {
+    transform: translate(2px, -4px) scale(1.05);
+    opacity: 0.7;
+  }
+
+  70% {
+    transform: translate(3.5px, -6px) scale(1.15);
+    opacity: 0.45;
+  }
+
+  85% {
+    transform: translate(5px, -8px) scale(1.25);
+    opacity: 0.2;
+  }
+
+  100% {
+    transform: translate(7px, -11px) scale(1.35);
+    opacity: 0;
+  }
+}
+
+.smoke {
+  animation: smoke-rise 2.8s linear infinite;
+  transform-origin: center;
+  will-change: transform, opacity;
 }
 
 /* 风险标签 */
@@ -742,4 +809,5 @@ body {
   .cloud, .wind-line, .flag, .person-svg, .p-scarf-tail {
     animation: none !important;
   }
+  .person::after { animation: none !important; }
 }

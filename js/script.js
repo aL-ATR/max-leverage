@@ -273,7 +273,10 @@ document.querySelectorAll(".dir-btn").forEach(btn => {
  * ============================================================ */
 
 const SCENE_FLOORS = 10;        // 楼层数：0~9 层，第 10 档 = 楼顶
+const LOBBY_PHONE_RISK_PERCENT = 5; // 低于此值：一楼出电梯看手机
 const ROOF_RISK_PERCENT = 60;   // 实际风险比例 ≥ 此值，小人到楼顶吹风
+const ROOF_SMOKE_RISK_PERCENT = 90; // 高于此值：楼顶走到旗杆旁抽烟
+const PERSON_ENTRY_DURATION_MS = 1100; // 小人走回电梯的动画时长（略长于 CSS 的 1 秒横移）
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -283,7 +286,7 @@ function riskToLevel(riskPercent) {
 }
 
 function riskToTier(riskPercent) {
-  if (riskPercent >= 60) return { key: "extreme", text: "极高风险" };
+  if (riskPercent >= ROOF_RISK_PERCENT) return { key: "extreme", text: "极高风险" };
   if (riskPercent >= 40) return { key: "high", text: "较高风险" };
   if (riskPercent >= 20) return { key: "mid", text: "中等风险" };
   return { key: "low", text: "低风险" };
@@ -355,6 +358,10 @@ const PERSON_SVG = `
     <circle cx="14" cy="8.6" r="0.8" fill="#1f2937"/>
     <rect x="6.5" y="13" width="11" height="2.4" rx="1.2" fill="#38bdf8"/>
     <path class="p-scarf-tail" d="M15.5 14 h3 v8 h-3z" fill="#38bdf8"/>
+    <path class="p-lobby-arm" d="M19 15 Q20.5 16.5 18.2 18.2 L16.3 20" fill="none" stroke="#ea580c" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <g class="p-phone"><rect x="10.8" y="18.2" width="3.5" height="5.8" rx="0.7" fill="#0f172a"/><rect x="11.3" y="18.8" width="2.5" height="4" rx="0.3" fill="#7dd3fc"/></g>
+    <path class="p-smoking-arm" d="M19 15 Q21 14.5 19.5 12.5" fill="none" stroke="#ea580c" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <g class="p-cigarette"><path d="M17.5 12.7 h3.8" stroke="#f8fafc" stroke-width="0.9" stroke-linecap="round"/><path d="M20.8 12.7 h0.6" stroke="#fb923c" stroke-width="0.9" stroke-linecap="round"/></g>
   </g>
 </svg>`;
 
@@ -392,26 +399,42 @@ const badgeTier = scene.querySelector(".rb-tier");
 const badgeFloor = scene.querySelector(".rb-floor");
 
 let sceneLevel = 0;          // 电梯当前目标档位（0~9 层，10 = 楼顶）
-let sceneOutside = false;    // 小人是否已走出电梯、站在楼顶
+let scenePersonMode = "inside"; // inside / lobby / roof / smoking
+let sceneReturnPromise = null;   // 共用回轿厢等待，避免快速改值时电梯提前启动
 let sceneRunId = 0;          // 用于打断上一次尚未完成的动画流程
 let sceneTimer = null;       // 输入防抖
 
 sceneFloors[0].classList.add("here");
 
-function setPersonOutside(outside) {
-  sceneOutside = outside;
-  scenePerson.classList.toggle("out", outside);
+function setPersonMode(mode) {
+  scenePersonMode = mode;
+  scenePerson.classList.toggle("out", mode === "roof" || mode === "smoking");
+  scenePerson.classList.toggle("lobby", mode === "lobby");
+  scenePerson.classList.toggle("smoking", mode === "smoking");
   scenePerson.classList.add("walking");
   setTimeout(() => scenePerson.classList.remove("walking"), 1000);
 }
 
-async function goToLevel(target) {
+function returnPersonToElevator() {
+  if (scenePersonMode !== "inside") {
+    setPersonMode("inside");
+    sceneReturnPromise = sleep(PERSON_ENTRY_DURATION_MS).then(() => {
+      sceneReturnPromise = null;
+    });
+  }
+  return sceneReturnPromise || Promise.resolve();
+}
+
+async function goToLevel(target, destinationMode = "inside") {
   const runId = ++sceneRunId;
 
-  // 1. 小人在楼顶、要下楼：先走回电梯
-  if (sceneOutside && target !== SCENE_FLOORS) {
-    setPersonOutside(false);
-    await sleep(1000);
+  // 只在同一楼层的楼顶姿势切换时留在外面；其他换层都先回轿厢并等横移结束。
+  if (sceneReturnPromise) {
+    await sceneReturnPromise;
+    if (runId !== sceneRunId) return;
+  }
+  if (scenePersonMode !== "inside" && (target !== sceneLevel || destinationMode === "inside")) {
+    await returnPersonToElevator();
     if (runId !== sceneRunId) return;
   }
 
@@ -430,10 +453,8 @@ async function goToLevel(target) {
   sceneLed.textContent = levelToLabel(target);
   sceneFloors.forEach((f, i) => f.classList.toggle("here", i === target));
 
-  // 3. 到达楼顶：走出电梯吹风
-  if (target === SCENE_FLOORS && !sceneOutside) {
-    setPersonOutside(true);
-  }
+  // 到站后再执行目标姿势；roof ↔ smoking 只改变横向位置，不乘梯。
+  if (destinationMode !== scenePersonMode) setPersonMode(destinationMode);
 }
 
 /**
@@ -450,16 +471,21 @@ function updateRiskScene(riskPercent) {
 
   const tier = riskToTier(riskPercent);
   const target = riskToLevel(riskPercent);
+  const personMode = riskPercent < LOBBY_PHONE_RISK_PERCENT ? "lobby" :
+    (riskPercent > ROOF_SMOKE_RISK_PERCENT ? "smoking" :
+      (riskPercent >= ROOF_RISK_PERCENT ? "roof" : "inside"));
 
   scene.dataset.risk = tier.key;
-  scene.dataset.wind = riskPercent >= 60 ? "2" : riskPercent >= 40 ? "1" : "0";
+  scene.dataset.wind = riskPercent >= ROOF_RISK_PERCENT ? "2" : riskPercent >= 40 ? "1" : "0";
   badgeRisk.textContent = "风险 " + riskPercent.toFixed(1) + "%";
   badgeTier.textContent = tier.text;
-  badgeFloor.textContent = "目标 " + levelToLabel(target);
+  badgeFloor.textContent = personMode === "lobby" ? "1F 看手机" :
+    (personMode === "roof" ? "楼顶吹风" :
+      (personMode === "smoking" ? "旗边抽烟" : "目标 " + levelToLabel(target)));
 
   // 防抖：避免输入过程中电梯来回乱跑
   clearTimeout(sceneTimer);
-  sceneTimer = setTimeout(() => goToLevel(target), 350);
+  sceneTimer = setTimeout(() => goToLevel(target, personMode), 350);
 }
 
 /* ============================================================
