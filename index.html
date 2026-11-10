@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>梭哈计算器</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body data-direction="LONG">
+  <header class="page-header">
+    <h1>梭哈计算器</h1>
+    <button type="button" class="guide-btn" id="openGuide">📖 使用说明</button>
+  </header>
+
+  <main class="layout">
+    <!-- 左侧：计算结果 -->
+    <section class="panel results-panel" aria-label="计算结果">
+      <h2 class="panel-title">计算结果</h2>
+
+      <div id="statusBanner" class="banner hidden"></div>
+
+      <div class="group-title">核心结果</div>
+      <div class="core-grid">
+        <div class="core-card blue">
+          <span class="core-label">理论最大杠杆</span>
+          <span class="core-value" id="resTheoretical">--</span>
+        </div>
+        <div class="core-card green">
+          <span class="core-label">实际可用杠杆</span>
+          <span class="core-value" id="resActualLeverage">--</span>
+        </div>
+        <div class="core-card orange">
+          <span class="core-label">ATR 止损距离</span>
+          <span class="core-value" id="resStopDistance">--</span>
+        </div>
+        <div class="core-card direction">
+          <span class="core-label">止损价格</span>
+          <span class="core-value" id="resStopPrice">--</span>
+        </div>
+      </div>
+
+      <div class="group-title">持仓参数</div>
+      <ul class="rows">
+        <li><span>保证金</span><b id="resMargin">--</b></li>
+        <li><span>名义持仓价值</span><b id="resNotional">--</b></li>
+        <li><span>持仓数量</span><b id="resQuantity">--</b></li>
+        <li><span>入场价格</span><b id="resEntry">--</b></li>
+        <li><span>ATR 数值</span><b id="resAtr">--</b></li>
+      </ul>
+
+      <div class="group-title">风险分析</div>
+      <ul class="rows">
+        <li><span>设定风险比例</span><b id="resRiskSet">--</b></li>
+        <li><span>实际保证金风险比例</span><b id="resRiskActual">--</b></li>
+        <li><span>预计亏损金额</span><b id="resExpectedLoss" class="loss">--</b></li>
+        <li><span>交易所最大杠杆限制</span><b id="resExchangeLimit">--</b></li>
+      </ul>
+    </section>
+
+    <!-- 右侧：交易参数 -->
+    <section class="panel params-panel" aria-label="交易参数">
+      <h2 class="panel-title">交易参数</h2>
+
+      <div class="field">
+        <label>交易方向</label>
+        <div class="direction-toggle" role="group" aria-label="交易方向">
+          <button type="button" class="dir-btn long active" data-direction="LONG">LONG 做多</button>
+          <button type="button" class="dir-btn short" data-direction="SHORT">SHORT 做空</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="entryPrice">入场价格 (Entry Price)</label>
+        <input id="entryPrice" type="text" inputmode="decimal" value="90.83" autocomplete="off" />
+        <small class="error" data-error-for="entryPrice"></small>
+      </div>
+
+      <div class="field">
+        <label for="atrValue">当前 ATR (ATR Value)</label>
+        <input id="atrValue" type="text" inputmode="decimal" value="1.87" autocomplete="off" />
+        <small class="hint">ATR 需与价格使用相同计价单位</small>
+        <small class="error" data-error-for="atrValue"></small>
+      </div>
+
+      <div class="field">
+        <label for="atrMultiplier">ATR 倍数 (ATR Multiplier)</label>
+        <input id="atrMultiplier" type="text" inputmode="decimal" value="1" autocomplete="off" />
+        <small class="error" data-error-for="atrMultiplier"></small>
+      </div>
+
+      <div class="field">
+        <label for="margin">保证金 (Margin, USDT)</label>
+        <input id="margin" type="text" inputmode="decimal" value="100" autocomplete="off" />
+        <small class="error" data-error-for="margin"></small>
+      </div>
+
+      <div class="field">
+        <label for="riskRatio">风险比例 (Risk Ratio, %)</label>
+        <input id="riskRatio" type="text" inputmode="decimal" value="49" autocomplete="off" />
+        <small class="error" data-error-for="riskRatio"></small>
+      </div>
+
+      <div class="field">
+        <label for="maxLeverage">交易所最大杠杆 (Exchange Max Leverage)</label>
+        <input id="maxLeverage" type="text" inputmode="decimal" value="125" autocomplete="off" />
+        <small class="error" data-error-for="maxLeverage"></small>
+      </div>
+    </section>
+  </main>
+
+  <footer class="disclaimer">
+    <p>本计算器根据 ATR 波动率和用户设定的风险比例估算杠杆与止损参数。</p>
+    <p>预计亏损为止损触发时的理论价格亏损，不包含交易手续费、滑点、资金费率及其他交易成本。</p>
+    <p>本计算器不代表交易所实际强平价格，也不保证实际成交价格与计算止损价格完全一致。</p>
+  </footer>
+
+  <!-- 使用说明弹窗 -->
+  <div class="modal-overlay" id="guideModal" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+      <div class="modal-head">
+        <h2 id="guideTitle">使用说明</h2>
+        <button type="button" class="modal-close" id="closeGuide" aria-label="关闭">×</button>
+      </div>
+
+      <div class="modal-body">
+        <h3>这个工具做什么</h3>
+        <p>
+          根据 ATR 波动率反推你"最多能用多少倍杠杆"，使 ATR 止损被触发时的亏损不超过你设定的风险比例。
+          核心原则：<b>ATR 越大，杠杆越低；ATR 越小，杠杆越高</b>。
+        </p>
+
+        <h3>背景小人是什么意思</h3>
+        <p>
+          背景里的电梯小人代表风险高低：<b>实际保证金风险比例越高，小人所在楼层越高</b>。
+          风险达到 60% 以上时，小人会走出电梯站在楼顶吹风，天色也会变暗。风险低时，小人待在楼下，天晴有太阳。
+        </p>
+
+        <h3>使用步骤</h3>
+        <ol>
+          <li>选择交易方向：LONG（做多）或 SHORT（做空）。</li>
+          <li>填写入场价格，以及当前 K 线对应的 ATR 数值（ATR 必须与价格是同一计价单位）。</li>
+          <li>设置 ATR 倍数（决定止损离入场价多远）、保证金、风险比例、交易所最大杠杆。</li>
+          <li>左侧结果会实时更新，无需点击计算按钮。</li>
+          <li>按"实际可用杠杆"开仓，并把止损设在"止损价格"。</li>
+        </ol>
+
+        <h3>参数说明</h3>
+        <ul>
+          <li><b>ATR 倍数</b>：止损距离 = ATR × 倍数。倍数越大，止损越宽，允许的杠杆越低。</li>
+          <li><b>保证金</b>：本次投入的本金（USDT）。</li>
+          <li><b>风险比例</b>：止损触发时，最多允许亏掉保证金的百分比。</li>
+          <li><b>交易所最大杠杆</b>：实际杠杆不会超过这个上限。</li>
+        </ul>
+
+        <h3>计算公式</h3>
+        <pre class="formula">止损距离     = ATR × ATR 倍数
+理论最大杠杆 = (风险比例 × 入场价) ÷ 止损距离
+实际可用杠杆 = min( 向下取整(理论杠杆), 交易所最大杠杆 )
+止损价格     = 做多：入场价 − 止损距离
+               做空：入场价 + 止损距离
+名义持仓价值 = 保证金 × 实际杠杆
+持仓数量     = 名义持仓价值 ÷ 入场价
+预计亏损     = 名义持仓价值 × 止损距离 ÷ 入场价</pre>
+
+        <h3>示例</h3>
+        <p>
+          做多，入场价 90.83，ATR 1.87，倍数 1，保证金 100，风险比例 49%：<br />
+          理论杠杆约 23.80，向下取整后实际杠杆为 <b>23 倍</b>，止损价 88.96，
+          预计亏损约 47.35 USDT（占保证金约 47.35%）。
+        </p>
+
+        <h3>结果怎么看</h3>
+        <ul>
+          <li><b>实际风险比例低于设定值</b>是正常的，因为杠杆向下取整，更保守。</li>
+          <li><b>显示"风险不足以支持 1 倍杠杆"</b>：说明止损太宽，请减小 ATR 倍数或提高风险比例。</li>
+          <li><b>交易所限制显示"已触及上限"</b>：说明理论杠杆比交易所允许的还高，实际按上限计算。</li>
+        </ul>
+
+        <p class="modal-note">
+          预计亏损为理论价格亏损，不含手续费、滑点和资金费率；也不代表交易所实际强平价格。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/script.js"></script>
+</body>
+</html>
