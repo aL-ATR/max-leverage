@@ -47,8 +47,7 @@ function validateInputs(raw) {
 
   const rules = [
     { id: "entryPrice", label: "入场价格", check: v => v > 0, msg: "入场价格必须大于 0" },
-    { id: "atrValue", label: "ATR", check: v => v > 0, msg: "ATR 必须大于 0" },
-    { id: "atrMultiplier", label: "ATR 倍数", check: v => v > 0, msg: "ATR 倍数必须大于 0" },
+    { id: "stopPrice", label: "止损价格", check: v => v > 0, msg: "止损价格必须大于 0" },
     { id: "margin", label: "保证金", check: v => v > 0, msg: "保证金必须大于 0" },
     { id: "riskRatio", label: "风险比例", check: v => v > 0 && v <= 100, msg: "风险比例必须大于 0 且不超过 100%" },
     { id: "maxLeverage", label: "交易所最大杠杆", check: v => v >= 1, msg: "交易所最大杠杆必须大于等于 1" },
@@ -73,19 +72,18 @@ function validateInputs(raw) {
  * ============================================================ */
 
 function calculateTrade(params) {
-  const { direction, entryPrice, atrValue, atrMultiplier, margin, riskRatioPercent, exchangeMaxLeverage } = params;
+  const { direction, entryPrice, stopPrice, margin, riskRatioPercent, exchangeMaxLeverage } = params;
 
   const riskRatio = riskRatioPercent / 100; // 49% -> 0.49
 
-  // 1. ATR 止损距离
-  const stopDistance = atrValue * atrMultiplier;
+  // 1. 止损距离 = 入场价与止损价格之差
+  const stopDistance = Math.abs(entryPrice - stopPrice);
 
-  // 2. 理论最大杠杆 Lmax = (Risk × Price) / (ATR × Multiplier)
+  // 2. 理论最大杠杆 Lmax = (Risk × Price) / StopDistance
   const theoreticalLeverage = (riskRatio * entryPrice) / stopDistance;
 
-  // 4. 止损价格
-  const stopLossPrice =
-    direction === "LONG" ? entryPrice - stopDistance : entryPrice + stopDistance;
+  // 3. 止损价格（直接使用输入值）
+  const stopLossPrice = stopPrice;
 
   // 3. 实际可用杠杆 = min(floor(理论), floor(交易所上限))
   const theoreticalFloor = floorSafe(theoreticalLeverage);
@@ -128,10 +126,10 @@ function calculateTrade(params) {
  * ============================================================ */
 
 const $ = id => document.getElementById(id);
-const inputIds = ["entryPrice", "atrValue", "atrMultiplier", "margin", "riskRatio", "maxLeverage"];
+const inputIds = ["entryPrice", "stopPrice", "margin", "riskRatio", "maxLeverage"];
 const resultIds = [
   "resTheoretical", "resActualLeverage", "resStopDistance", "resStopPrice",
-  "resMargin", "resNotional", "resQuantity", "resEntry", "resAtr",
+  "resMargin", "resNotional", "resQuantity", "resEntry",
   "resRiskSet", "resRiskActual", "resExpectedLoss", "resExchangeLimit",
 ];
 
@@ -180,25 +178,37 @@ function render() {
     return;
   }
 
+  // 方向一致性校验：做多止损价应低于入场价，做空止损价应高于入场价
+  if (currentDirection === "LONG" && values.stopPrice >= values.entryPrice) {
+    clearResults();
+    updateRiskScene(null);
+    showBanner("error", "做多时止损价格必须低于入场价格，请调整止损价格。");
+    return;
+  }
+  if (currentDirection === "SHORT" && values.stopPrice <= values.entryPrice) {
+    clearResults();
+    updateRiskScene(null);
+    showBanner("error", "做空时止损价格必须高于入场价格，请调整止损价格。");
+    return;
+  }
+
   const r = calculateTrade({
     direction: currentDirection,
     entryPrice: values.entryPrice,
-    atrValue: values.atrValue,
-    atrMultiplier: values.atrMultiplier,
+    stopPrice: values.stopPrice,
     margin: values.margin,
     riskRatioPercent: values.riskRatio,
     exchangeMaxLeverage: values.maxLeverage,
   });
 
-  // 价格精度：取入场价与 ATR 小数位的较大值，限定在 2~8 位
-  const priceDecimals = Math.min(8, Math.max(2, countDecimals(raw.entryPrice), countDecimals(raw.atrValue)));
+  // 价格精度：取入场价与止损价小数位的较大值，限定在 2~8 位
+  const priceDecimals = Math.min(8, Math.max(2, countDecimals(raw.entryPrice), countDecimals(raw.stopPrice)));
 
   // 核心结果（无论杠杆是否有效都可展示）
   $("resTheoretical").textContent = formatNumber(r.theoreticalLeverage, 2) + "x";
   $("resStopDistance").textContent = formatNumber(r.stopDistance, priceDecimals);
   $("resStopPrice").textContent = formatNumber(r.stopLossPrice, priceDecimals);
   $("resEntry").textContent = formatNumber(values.entryPrice, priceDecimals);
-  $("resAtr").textContent = formatNumber(values.atrValue, priceDecimals);
   $("resMargin").textContent = formatNumber(values.margin, 2) + " USDT";
   $("resRiskSet").textContent = formatNumber(values.riskRatio, 2) + "%";
 
@@ -211,7 +221,7 @@ function render() {
     $("resExpectedLoss").textContent = "--";
     $("resExchangeLimit").textContent = "--";
     showBanner("warn", "风险不足以支持 1 倍杠杆（理论杠杆 " + formatNumber(r.theoreticalLeverage, 2) +
-      "x < 1）。请减小 ATR 倍数、提高风险比例，或更换品种/周期，无法生成有效持仓计算结果。");
+      "x < 1）。请拉近止损价、提高风险比例，或更换品种/周期，无法生成有效持仓计算结果。");
     return;
   }
 
@@ -249,8 +259,7 @@ document.querySelectorAll(".dir-btn").forEach(btn => {
   const r = calculateTrade({
     direction: "LONG",
     entryPrice: 90.83,
-    atrValue: 1.87,
-    atrMultiplier: 1,
+    stopPrice: 88.96,
     margin: 100,
     riskRatioPercent: 49,
     exchangeMaxLeverage: 125,
