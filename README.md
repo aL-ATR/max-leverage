@@ -9,6 +9,7 @@
 [![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)](#)
 [![零依赖](https://img.shields.io/badge/dependencies-0-success?style=flat-square)](#)
 [![响应式](https://img.shields.io/badge/responsive-yes-blue?style=flat-square)](#)
+[![在线访问](https://img.shields.io/badge/online-max.xyron.top-success?style=flat-square)](https://max.xyron.top)
 
 ## 📖 简介
 
@@ -51,7 +52,9 @@
 
 ## 🚀 快速开始
 
-纯静态项目,**无需安装任何依赖或构建工具**。直接双击 `index.html` 即可使用,或启动任意静态服务器:
+纯静态项目,**无需安装任何依赖或构建工具**。直接双击 `index.html` 即可使用,或启动任意静态服务器。
+
+> 🌐 **在线访问**:<https://max.xyron.top>
 
 ```bash
 # 方式一:直接双击 index.html 打开
